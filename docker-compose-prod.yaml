@@ -1,0 +1,44 @@
+version: '3.7'
+
+services:
+  redis:
+    image: redis:6-alpine
+    restart: always
+    ports:
+        - 6379
+
+  flower:
+    image: mher/flower
+    restart: always
+    environment:
+        - CELERY_BROKER_URL=redis://redis:6379/0
+        - FLOWER_PORT=8888
+    ports:
+        - 8888:8888
+    depends_on:
+        - redis
+
+  worker_create_report:
+    build:
+      context: ./worker_create_reports/
+    restart: always
+    command: celery -A create_report_task worker -l INFO
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      - redis
+      - flower
+
+  fastapi:
+    build:
+      context: ./server/
+    restart: always
+    command: uvicorn run_prod:app --host 0.0.0.0 --port 8000
+    environment:
+      - PYTHONUNBUFFERED=True
+    ports:
+        - 8001:8000
+    depends_on:
+      - redis
+      - flower
